@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+build/
+
+# Runtime logs
+logs/
+*.log
+
+# Local config (contains machine-specific paths — copy config.example.json and rename)
+config.json
+
+# Auto-generated worker script (created by Start-MD365XppMcp.ps1 -AsService)
+Start-MD365XppMcp-Worker.ps1
+
+# D365 compiler cache
+XppMetadata/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code local session files
+.claude/
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.user

@@ -1,0 +1,7 @@
+{
+  "packagesRoot": "C:\\AOSService\\PackagesLocalDirectory",
+  "defaultModel": "AA",
+  "binPath":      "C:\\AOSService\\PackagesLocalDirectory\\bin",
+  "defaultLocale": "en-US",
+  "useLabels":    true
+}

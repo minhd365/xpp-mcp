@@ -1,0 +1,11 @@
+# Normalize line endings to LF in the repo; checkout as CRLF on Windows
+* text=auto eol=lf
+
+# Force CRLF for Windows-only files
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files — no line ending conversion
+*.svg binary
+*.png binary
+*.jpg binary

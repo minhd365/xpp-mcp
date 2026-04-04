@@ -1,0 +1,73 @@
+xpp-mcp — Source Available License
+
+Copyright (c) 2026 minhd365 (https://github.com/minhd365)
+
+---
+
+FREE USE GRANT
+
+Permission is granted, free of charge, to any individual person to use,
+copy, modify, and distribute this software for:
+
+  - Personal projects and learning
+  - Non-commercial open source projects
+  - Academic or educational purposes
+  - Non-profit organizations
+
+Contributions to this repository are welcome under the same terms.
+By submitting a contribution (pull request, patch, etc.) you agree that
+your contribution is licensed under the same terms as this software.
+
+---
+
+COMMERCIAL USE — LICENSE REQUIRED
+
+Use of this software by a business or organization requires a separate
+commercial license from the author. This includes, but is not limited to:
+
+  - Use within a company or organization with paid employees or contractors
+  - Use in consulting, implementation, or delivery work for third-party clients
+  - Embedding this software in a commercial product or service
+  - Any use that directly or indirectly generates revenue
+
+To request a commercial license, open an issue at:
+  https://github.com/minhd365/xpp-mcp/issues
+
+---
+
+CHANGE DATE
+
+On 2029-01-01, this software will be automatically re-licensed under the
+MIT License (https://opensource.org/licenses/MIT). From that date, all
+use restrictions above are removed and the software is fully open source.
+
+---
+
+THIRD-PARTY SOFTWARE DEPENDENCY
+
+This software requires a valid Microsoft Dynamics 365 Finance & Operations
+developer license. It invokes Microsoft-owned binaries (xppc.exe, xppbp.exe,
+SyncEngine.exe) that are proprietary software of Microsoft Corporation,
+subject to Microsoft's own license terms. This software does not distribute
+or modify any Microsoft binaries. Users are solely responsible for holding
+the appropriate Microsoft licenses.
+
+This project is not affiliated with, endorsed by, or supported by
+Microsoft Corporation. "Dynamics 365", "Finance & Operations", "X++", and
+related product names are trademarks of Microsoft Corporation.
+
+---
+
+DISCLAIMER
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+
+---
+
+SPDX-License-Identifier: LicenseRef-xpp-mcp-1.0
