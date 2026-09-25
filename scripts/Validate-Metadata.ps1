@@ -13,7 +13,40 @@ param(
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 $binPath   = Join-Path $PackagesRoot "bin"
-$modelPath = Join-Path (Join-Path $PackagesRoot $Model) $Model
+
+# Resolve model path correctly for multi-model packages.
+# For single-model packages: PackagesRoot\MM\MM  (packageFolder == modelName)
+# For multi-model packages:  PackagesRoot\ApplicationSuite\Foundation
+# Strategy: scan all package folders for a Descriptor that names this model,
+# then use packageFolder\modelName as the AOT root. Fall back to $Model\$Model.
+$modelPath = $null
+$packageFolders = Get-ChildItem -Path $PackagesRoot -Directory -ErrorAction SilentlyContinue
+foreach ($pkg in $packageFolders) {
+    $descDir = Join-Path $pkg.FullName "Descriptor"
+    if (-not (Test-Path $descDir)) { continue }
+    foreach ($xmlFile in (Get-ChildItem $descDir -Filter "*.xml" -File -ErrorAction SilentlyContinue)) {
+        $raw = [System.IO.File]::ReadAllBytes($xmlFile.FullName)
+        # Detect UTF-16 LE (BOM FF FE or odd bytes 0x00)
+        $content = if ($raw.Length -gt 1 -and (($raw[0] -eq 0xFF -and $raw[1] -eq 0xFE) -or ($raw.Length -gt 3 -and $raw[1] -eq 0x00 -and $raw[3] -eq 0x00))) {
+            [System.Text.Encoding]::Unicode.GetString($raw)
+        } else {
+            [System.Text.Encoding]::UTF8.GetString($raw)
+        }
+        if ($content -match '<Name>([^<]+)</Name>') {
+            if ($Matches[1].Trim() -eq $Model) {
+                $modelPath = Join-Path $pkg.FullName $Model
+                break
+            }
+        }
+    }
+    if ($modelPath) { break }
+}
+
+# Fallback to simple $Model\$Model convention if descriptor scan found nothing
+if (-not $modelPath) {
+    $modelPath = Join-Path (Join-Path $PackagesRoot $Model) $Model
+    Write-Output "INFO: Descriptor scan found no match for '$Model'; falling back to $modelPath"
+}
 
 if (-not (Test-Path $modelPath)) {
     Write-Output "ERROR: Model path not found: $modelPath"

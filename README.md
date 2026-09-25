@@ -237,15 +237,6 @@ The tooling and documentation provided here are for development assistance purpo
 
 ## License
 
-**Free for individuals. Commercial license required for businesses.**
-
-| Who | Terms |
-|---|---|
-| Individual developers, personal projects | **Free** |
-| Students, educators, non-profits | **Free** |
-| Open source contributors | **Free** — contributions welcome |
-| Businesses, consulting firms, enterprise use | **Commercial license required** — [open an issue](https://github.com/minhd365/xpp-mcp/issues) |
-
-On **2029-01-01** this software automatically converts to the **MIT License** (fully open source).
+MIT License — free for everyone, including commercial use.
 
 See [`LICENSE`](LICENSE) for full terms.

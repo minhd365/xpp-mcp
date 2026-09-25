@@ -67,7 +67,7 @@ const QueryDsSchema       = z.object({
 });
 
 export const ObjectToolInputSchema = z.object({
-  action:    z.enum(['create', 'inspect', 'delete', 'list_types']),
+  action:    z.enum(['create', 'inspect', 'delete', 'list_types', 'edit']),
   type:      z.string().optional(),
   model:     z.string().optional(),
   name:      z.string().optional(),
@@ -155,6 +155,100 @@ export async function handleObjectTool(
     if (!writer.exists(fp)) return `Object not found: ${fp}`;
     fs.renameSync(fp, fp + '.deleted');
     return `Deleted (renamed to .deleted): ${fp}`;
+  }
+
+  // ── edit — in-place XML patch for additive changes ────────────────────────
+  // Supports: adding fields to AxTable, adding enum values to AxEnum,
+  //           adding listFields to AxForm grids, adding indexes to AxTable.
+  // For structural reshaping, use action:"create" (full regeneration).
+  if (input.action === 'edit') {
+    if (!input.model || !input.type || !input.name) return 'edit requires: model, type, name';
+    const fp = registry.getAotPath(input.model, canonicalFolder(input.type), input.name);
+    if (!writer.exists(fp)) return `Object not found: ${fp}. Use action:"create" first.`;
+    const existing = writer.readRaw(fp);
+    const model    = registry.getModel(input.model);
+    const useLbls  = input.useLabels !== false;
+    const patches: string[] = [];
+
+    // Add new fields to AxTable or AxTableExtension
+    if ((input.type === 'AxTable' || input.type === 'AxTableExtension') && input.fields && input.fields.length > 0) {
+      const { generateField } = await import('../schemas/ax-table');
+      for (const f of input.fields) {
+        const resolvedLabel = f.label ? labels.resolve(model, f.name, f.label, useLbls) : undefined;
+        const fieldXml = generateField({
+          name: f.name, fieldType: f.fieldType as import('../schemas/types').FieldType,
+          label: resolvedLabel, helpText: f.helpText, edt: f.edt, enumType: f.enumType,
+          mandatory: f.mandatory, allowEdit: f.allowEdit,
+          allowEditOnCreate: f.allowEditOnCreate, visible: f.visible, null: f.null,
+        }).join('\n');
+        // Only add if not already present
+        if (existing.includes(`<Name>${f.name}</Name>`)) {
+          patches.push(`⚠️  Field "${f.name}" already exists — skipped`);
+          continue;
+        }
+        const insertBefore = '\t</Fields>';
+        if (!existing.includes(insertBefore)) {
+          return `Cannot patch: <Fields> block not found in ${fp}. Use action:"create" to regenerate.`;
+        }
+        const patched = existing.replace(insertBefore, `${fieldXml}\n${insertBefore}`);
+        writer.write(fp, patched);
+        patches.push(`✅ Added field "${f.name}" to ${fp}`);
+      }
+    }
+
+    // Add new enum values to AxEnum
+    if (input.type === 'AxEnum' && input.values && input.values.length > 0) {
+      for (const v of input.values) {
+        if (existing.includes(`<Name>${v.name}</Name>`)) {
+          patches.push(`⚠️  Enum value "${v.name}" already exists — skipped`);
+          continue;
+        }
+        const resolvedLabel = v.label ? labels.resolve(model, v.name, v.label, useLbls) : undefined;
+        const valXml = [
+          '\t\t<AxEnumValue>',
+          `\t\t\t<Name>${v.name}</Name>`,
+          resolvedLabel ? `\t\t\t<Label>${resolvedLabel}</Label>` : '',
+          `\t\t\t<Value>${v.value}</Value>`,
+          '\t\t</AxEnumValue>',
+        ].filter(Boolean).join('\n');
+        const insertBefore = '\t</EnumValues>';
+        if (!existing.includes(insertBefore)) {
+          return `Cannot patch: <EnumValues> block not found in ${fp}. Use action:"create".`;
+        }
+        const current = writer.readRaw(fp);
+        writer.write(fp, current.replace(insertBefore, `${valXml}\n${insertBefore}`));
+        patches.push(`✅ Added enum value "${v.name}" (${v.value}) to ${fp}`);
+      }
+    }
+
+    // Add new listFields to AxForm grid (SimpleList/SimpleListDetails)
+    if (input.type === 'AxForm' && input.listFields && input.listFields.length > 0) {
+      for (const fieldName of input.listFields) {
+        if (existing.includes(`<DataField>${fieldName}</DataField>`)) {
+          patches.push(`⚠️  Grid field "${fieldName}" already exists — skipped`);
+          continue;
+        }
+        const ctrlXml = [
+          '\t\t\t\t\t<AxFormStringControl xmlns="" i:type="AxFormStringControl">',
+          `\t\t\t\t\t\t<Name>${fieldName}</Name>`,
+          `\t\t\t\t\t\t<DataField>${fieldName}</DataField>`,
+          '\t\t\t\t\t</AxFormStringControl>',
+        ].join('\n');
+        // Find the GridDesign Controls closing tag
+        const insertBefore = '\t\t\t\t</Controls>';
+        if (!existing.includes(insertBefore)) {
+          return `Cannot patch: Grid Controls block not found in ${fp}. The form may use a pattern that requires full regeneration.`;
+        }
+        const current = writer.readRaw(fp);
+        writer.write(fp, current.replace(insertBefore, `${ctrlXml}\n${insertBefore}`));
+        patches.push(`✅ Added grid field "${fieldName}" to form ${fp}`);
+      }
+    }
+
+    if (patches.length === 0) {
+      return `No supported edit operations specified for ${input.type}.\nSupported: fields (AxTable/AxTableExtension), values (AxEnum), listFields (AxForm).`;
+    }
+    return patches.join('\n') + `\n\nNext: d365_build { action:"compile", model:"${input.model}" }`;
   }
 
   // ── create ────────────────────────────────────────────────────────────────

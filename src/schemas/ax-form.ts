@@ -221,10 +221,33 @@ function generateSimpleListForm(
   const caption   = spec.caption ?? spec.name;
 
   // Meaningful control names: based on table name, not generic numbered names
-  const actionPaneName = `${spec.name}_ActionPane`;
+  const actionPaneName  = `${spec.name}_ActionPane`;
   const filterGroupName = `${spec.name}_FilterGroup`;
   const quickFilterName = `${spec.name}_QuickFilter`;
   const gridName        = `${spec.name}_Grid`;
+
+  // ActionPane buttons — emit a ButtonGroup when caller supplies actionPaneButtons
+  const buttons = spec.actionPaneButtons ?? [];
+  const actionPaneInner = buttons.length > 0
+    ? (() => {
+        const btnXml = buttons.map(b =>
+          `\t\t\t\t\t<AxFormControl xmlns="" i:type="AxFormCommandButtonControl">\n` +
+          `\t\t\t\t\t\t<Name>${b.name}</Name>\n` +
+          `\t\t\t\t\t\t<Type>CommandButton</Type>\n` +
+          `\t\t\t\t\t\t<FormControlExtension i:nil="true" />\n` +
+          `\t\t\t\t\t\t<Command>${b.command ?? b.menuItem ?? ''}</Command>\n` +
+          `\t\t\t\t\t</AxFormControl>`
+        ).join('\n');
+        return `<Controls>\n` +
+          `\t\t\t\t<AxFormControl xmlns="" i:type="AxFormButtonGroupControl">\n` +
+          `\t\t\t\t\t<Name>${actionPaneName}_ButtonGroup</Name>\n` +
+          `\t\t\t\t\t<Type>ButtonGroup</Type>\n` +
+          `\t\t\t\t\t<FormControlExtension i:nil="true" />\n` +
+          `\t\t\t\t\t<Controls>\n${btnXml}\n\t\t\t\t\t</Controls>\n` +
+          `\t\t\t\t</AxFormControl>\n` +
+          `\t\t\t</Controls>`;
+      })()
+    : `<Controls />`;
 
   const gridControls = fields.map(f => {
     const ct = formControlType(f, spec.fieldTypes);
@@ -245,7 +268,7 @@ ${formDataSources(ds)}
 \t\t\t\t<Name>${actionPaneName}</Name>
 \t\t\t\t<Type>ActionPane</Type>
 \t\t\t\t<FormControlExtension i:nil="true" />
-\t\t\t\t<Controls />
+\t\t\t\t${actionPaneInner}
 \t\t\t</AxFormControl>
 \t\t\t<AxFormControl xmlns="" i:type="AxFormGroupControl">
 \t\t\t\t<Name>${filterGroupName}</Name>

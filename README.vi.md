@@ -218,16 +218,7 @@ Công cụ và tài liệu được cung cấp ở đây chỉ nhằm mục đí
 
 ## Giấy phép
 
-**Miễn phí cho cá nhân. Doanh nghiệp cần liên hệ để được cấp phép thương mại.**
-
-| Đối tượng | Điều khoản |
-|---|---|
-| Lập trình viên cá nhân, dự án cá nhân | **Miễn phí** |
-| Học sinh, giáo viên, tổ chức phi lợi nhuận | **Miễn phí** |
-| Đóng góp mã nguồn mở | **Miễn phí** — hoan nghênh đóng góp |
-| Doanh nghiệp, công ty tư vấn, sử dụng trong doanh nghiệp | **Cần giấy phép thương mại** — [mở issue tại đây](https://github.com/minhd365/xpp-mcp/issues) |
-
-Vào ngày **2029-01-01**, phần mềm này tự động chuyển sang **Giấy phép MIT** (mã nguồn mở hoàn toàn).
+Giấy phép MIT — miễn phí cho tất cả mọi người, kể cả sử dụng thương mại.
 
 Xem tệp [`LICENSE`](LICENSE) để biết chi tiết đầy đủ.
 

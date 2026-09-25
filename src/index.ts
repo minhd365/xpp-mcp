@@ -51,23 +51,65 @@ async function main() {
       {
         name: 'd365_object',
         description:
-          'Create, inspect, or delete D365 F&O AOT objects (AxTable, AxClass, AxEnum, AxEdt). ' +
-          'Single call creates complete objects including fields, indexes, and label files.',
+          'Create, inspect, edit, or delete D365 F&O AOT objects. ' +
+          'Use action:"edit" to add fields to AxTable, enum values to AxEnum, or grid fields to AxForm without full regeneration. ' +
+          'Supported types: AxTable, AxClass, AxEnum, AxEdt, AxQuery, ' +
+          'AxForm, AxSecurityPrivilege, AxSecurityDuty, AxSecurityRole, ' +
+          'AxMenuItemDisplay, AxMenuItemAction, AxMenuItemOutput, AxMenu, AxMenuExtension, AxTableExtension. ' +
+          'ALWAYS use this tool instead of writing raw XML — it generates correct D365 XML with proper <Name> tags, ' +
+          'namespaces, CRLF line endings, and label file entries automatically.',
         inputSchema: {
           type: 'object',
           properties: {
-            action:   { type: 'string', enum: ['create', 'inspect', 'delete', 'list_types'] },
-            type:     { type: 'string', description: 'e.g. AxTable, AxClass, AxEnum, AxEdt' },
+            action:   { type: 'string', enum: ['create', 'inspect', 'delete', 'list_types', 'edit'] },
+            type:     { type: 'string', description: 'AxTable | AxClass | AxEnum | AxEdt | AxQuery | AxForm | AxSecurityPrivilege | AxSecurityDuty | AxSecurityRole | AxMenuItemDisplay | AxMenuItemAction | AxMenuItemOutput | AxMenu | AxMenuExtension | AxTableExtension' },
             model:    { type: 'string', description: `Default: ${config.defaultModel}` },
             name:     { type: 'string' },
             label:    { type: 'string', description: 'Plain text — auto-creates label entry' },
-            fields:   { type: 'array',  description: 'AxTable fields' },
-            indexes:  { type: 'array',  description: 'AxTable indexes' },
-            values:   { type: 'array',  description: 'AxEnum values' },
-            edtType:  { type: 'string', description: 'AxEdt subtype: String|Int|Real|Date|DateTime|Int64|Enum|Guid|Container' },
-            classDeclaration: { type: 'string', description: 'AxClass declaration block' },
-            methods:  { type: 'array',  description: 'Methods for AxTable or AxClass' },
+            helpText: { type: 'string', description: 'Help text (AxTable, AxEdt, AxMenuItemDisplay)' },
             useLabels:{ type: 'boolean', description: 'Auto-manage label files (default true)' },
+            // AxTable
+            fields:        { type: 'array',  description: 'AxTable fields: [{name, fieldType, label?, edt?, mandatory?, null?}]' },
+            indexes:       { type: 'array',  description: 'AxTable indexes: [{name, fields[], unique?}]' },
+            fieldGroups:   { type: 'array',  description: 'AxTable field groups: [{name, fields[], label?}]' },
+            relations:     { type: 'array',  description: 'AxTable relations' },
+            deleteActions: { type: 'array',  description: 'AxTable delete actions' },
+            tableGroup:    { type: 'string', description: 'AxTable TableGroup (Main|Transaction|Parameter|...)' },
+            cacheLookup:   { type: 'string', description: 'AxTable CacheLookup (Found|NotInTTS|...)' },
+            titleField1:   { type: 'string', description: 'AxTable TitleField1' },
+            titleField2:   { type: 'string', description: 'AxTable TitleField2' },
+            // AxClass
+            classDeclaration: { type: 'string', description: 'AxClass/AxTable class declaration X++ source' },
+            methods:          { type: 'array',  description: 'Methods: [{name, source}]' },
+            extends:          { type: 'string', description: 'AxClass base class name' },
+            // AxEnum
+            values:   { type: 'array', description: 'AxEnum values: [{name, label?, value}]' },
+            // AxEdt
+            edtType:        { type: 'string', description: 'AxEdt subtype: String|Int|Real|Date|DateTime|Int64|Enum|Guid|Container' },
+            stringSize:     { type: 'number', description: 'AxEdt string length (default 60)' },
+            referenceTable: { type: 'string', description: 'AxEdt reference table for lookup' },
+            // AxForm
+            pattern:          { type: 'string', description: 'AxForm pattern: SimpleList | Dialog | SimpleListDetails | ListPage | DetailsTransaction | ...' },
+            caption:          { type: 'string', description: 'AxForm caption (plain text only — do NOT use label references)' },
+            titleDataSource:  { type: 'string', description: 'AxForm TitleDataSource (usually the primary table name)' },
+            dataSources:      { type: 'array',  description: 'AxForm data sources: [{table, name?, fields?[]}]' },
+            listFields:       { type: 'array',  description: 'AxForm grid/list field names (used for SimpleList and left-panel of SimpleListDetails)' },
+            detailFastTabs:   { type: 'array',  description: 'AxForm detail tab pages: [{caption, fields[]}]' },
+            actionPaneButtons:{ type: 'array',  description: 'AxForm action pane buttons: [{name, command?}] — e.g. [{name:"buttonNew",command:"New"},{name:"buttonDelete",command:"DeleteRecord"}]' },
+            fieldTypes:       { type: 'object', description: 'AxForm field→type map for correct control types: {"MyField":"AxTableFieldDate"}' },
+            // AxSecurityPrivilege
+            entryPoints: { type: 'array', description: 'Privilege entry points: [{menuItem, objectType?, grants?{read?,create?,update?,delete?}, forms?[{name}]}]' },
+            // AxSecurityDuty
+            privileges: { type: 'array', description: 'Duty privilege names: ["MyPrivilege"]' },
+            // AxSecurityRole
+            duties:      { type: 'array',  description: 'Role duty names: ["MyDuty"]' },
+            description: { type: 'string', description: 'Security object description text' },
+            // AxMenuItemDisplay/Action/Output
+            object:     { type: 'string', description: 'Menu item target: form/class/report name' },
+            objectType: { type: 'string', description: 'Menu item ObjectType: Form | Class | Report' },
+            parameters: { type: 'string', description: 'Menu item Args.parm() value' },
+            // AxMenu / AxMenuExtension
+            elements: { type: 'array', description: 'AxMenu items: [{menuItemName, menuItemType?}] | AxMenuExtension items: [{parent, menuItemName, menuItemType?}]' },
           },
           required: ['action'],
         },

@@ -37,20 +37,29 @@ export class LabelManager {
   /**
    * Sanitize a label key: PascalCase, alphanumeric + underscore only.
    * e.g. "Person Code" → "PersonCode"
+   * Returns undefined if the result would be empty (e.g. input was all digits/punctuation).
    */
-  sanitizeKey(text: string): string {
-    return text
+  sanitizeKey(text: string): string | undefined {
+    const key = text
       .split(/\s+/)
       .map(w => w.charAt(0).toUpperCase() + w.slice(1))
       .join('')
       .replace(/[^A-Za-z0-9_]/g, '');
+    return key.length > 0 ? key : undefined;
   }
 
   /**
    * Upsert a label entry (add if missing, skip if already present).
-   * Returns the label reference string.
+   * Returns the label reference string, or the raw value if the key cannot be sanitized.
    */
   upsert(model: ModelInfo, key: string, value: string, comment?: string): string {
+    const safeKey = this.sanitizeKey(key);
+    if (!safeKey) {
+      // Key is empty after sanitization (e.g. all-numeric input) — fall back to raw value
+      console.error(`[LabelManager] Cannot create label key from "${key}" — using raw value`);
+      return value;
+    }
+
     const modelAotRoot = path.join(this.packagesRoot, model.packageFolder, model.name);
     const labelFileId = this.getLabelFileId(model.name);
 
@@ -61,7 +70,7 @@ export class LabelManager {
 
     // 1. Upsert the .label.txt resource file
     const txtPath = path.join(resourceDir, `${labelFileId}.${this.locale}.label.txt`);
-    this.upsertTxtEntry(txtPath, key, value, comment);
+    this.upsertTxtEntry(txtPath, safeKey, value, comment);
 
     // 2. Upsert the AxLabelFile descriptor XML
     const xmlName = `${labelFileId}_${this.locale}`;
@@ -69,7 +78,7 @@ export class LabelManager {
     const relPath = `${model.name}\\${model.name}\\AxLabelFile\\LabelResources\\${this.locale}\\${labelFileId}.${this.locale}.label.txt`;
     this.upsertDescriptorXml(xmlPath, xmlName, labelFileId, this.locale, relPath);
 
-    return this.buildRef(model.name, key);
+    return this.buildRef(model.name, safeKey);
   }
 
   private upsertTxtEntry(txtPath: string, key: string, value: string, comment?: string): void {
@@ -119,7 +128,13 @@ export class LabelManager {
   ): string {
     if (!useLabels) return text;
     if (text.startsWith('@')) return text;
-    const key = this.sanitizeKey(keyHint.length > 0 ? keyHint : text);
-    return this.upsert(model, key, text);
+    const hint = keyHint.length > 0 ? keyHint : text;
+    const safeKey = this.sanitizeKey(hint);
+    if (!safeKey) {
+      // Cannot derive a valid label key — return the raw text rather than silently dropping it
+      console.error(`[LabelManager] Cannot sanitize key hint "${hint}" — using raw text`);
+      return text;
+    }
+    return this.upsert(model, safeKey, text);
   }
 }

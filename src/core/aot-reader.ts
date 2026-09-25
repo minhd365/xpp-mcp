@@ -22,7 +22,7 @@ export class AotReader {
     }
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      const name = this.extractTag(content, 'n');
+      const name = this.extractTag(content, 'Name');  // Bug fix: was 'n' (lowercase) — always returned undefined
       const objectType = this.detectType(content);
       return { exists: true, path: filePath, content, name, objectType };
     } catch (e: unknown) {
