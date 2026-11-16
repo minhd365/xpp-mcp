@@ -1,6 +1,8 @@
 import * as fs   from 'fs';
 import * as path from 'path';
 import { ModelInfo } from '../schemas/types';
+import { canonicalFolder } from '../schemas/namespaces';
+import { assertSafeModelName, assertSafeObjectName, resolveContainedPath } from './path-security';
 
 /**
  * ModelRegistry — scans ALL Descriptor XMLs under PackagesLocalDirectory.
@@ -127,6 +129,14 @@ export class ModelRegistry {
     return m;
   }
 
+  getModelPath(modelName: string): string {
+    assertSafeModelName(modelName);
+    const model = this.getModel(modelName);
+    assertSafeModelName(model.packageFolder);
+    assertSafeModelName(model.name);
+    return resolveContainedPath(this.packagesRoot, model.packageFolder, model.name);
+  }
+
   list(customOnly = false): ModelInfo[] {
     const all = Array.from(this.models.values());
     return customOnly ? all.filter(m => m.isCustom) : all;
@@ -139,12 +149,26 @@ export class ModelRegistry {
    * packagesRoot / packageFolder / modelName / objectType / objectName.xml
    */
   getAotPath(modelName: string, objectType: string, objectName: string): string {
-    const m = this.getModel(modelName);
-    return path.join(this.packagesRoot, m.packageFolder, m.name, objectType, `${objectName}.xml`);
+    assertSafeObjectName(objectName);
+    const model = this.getModel(modelName);
+    this.getModelPath(modelName);
+    return resolveContainedPath(
+      this.packagesRoot,
+      model.packageFolder,
+      model.name,
+      canonicalFolder(objectType),
+      `${objectName}.xml`,
+    );
   }
 
   getAotFolder(modelName: string, objectType: string): string {
-    const m = this.getModel(modelName);
-    return path.join(this.packagesRoot, m.packageFolder, m.name, objectType);
+    const model = this.getModel(modelName);
+    this.getModelPath(modelName);
+    return resolveContainedPath(
+      this.packagesRoot,
+      model.packageFolder,
+      model.name,
+      canonicalFolder(objectType),
+    );
   }
 }

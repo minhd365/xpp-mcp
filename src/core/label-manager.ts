@@ -1,6 +1,6 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { ModelInfo } from '../schemas/types';
+import { resolveContainedPath } from './path-security';
 
 /**
  * LabelManager — manages D365 label files.
@@ -60,21 +60,32 @@ export class LabelManager {
       return value;
     }
 
-    const modelAotRoot = path.join(this.packagesRoot, model.packageFolder, model.name);
     const labelFileId = this.getLabelFileId(model.name);
 
     // Ensure directories exist
-    const labelDir = path.join(modelAotRoot, 'AxLabelFile');
-    const resourceDir = path.join(labelDir, 'LabelResources', this.locale);
+    const labelDir = resolveContainedPath(this.packagesRoot, model.packageFolder, model.name, 'AxLabelFile');
+    const resourceDir = resolveContainedPath(
+      this.packagesRoot, model.packageFolder, model.name, 'AxLabelFile', 'LabelResources', this.locale,
+    );
     fs.mkdirSync(resourceDir, { recursive: true });
 
     // 1. Upsert the .label.txt resource file
-    const txtPath = path.join(resourceDir, `${labelFileId}.${this.locale}.label.txt`);
+    const txtPath = resolveContainedPath(
+      this.packagesRoot,
+      model.packageFolder,
+      model.name,
+      'AxLabelFile',
+      'LabelResources',
+      this.locale,
+      `${labelFileId}.${this.locale}.label.txt`,
+    );
     this.upsertTxtEntry(txtPath, safeKey, value, comment);
 
     // 2. Upsert the AxLabelFile descriptor XML
     const xmlName = `${labelFileId}_${this.locale}`;
-    const xmlPath = path.join(labelDir, `${xmlName}.xml`);
+    const xmlPath = resolveContainedPath(
+      this.packagesRoot, model.packageFolder, model.name, 'AxLabelFile', `${xmlName}.xml`,
+    );
     const relPath = `${model.name}\\${model.name}\\AxLabelFile\\LabelResources\\${this.locale}\\${labelFileId}.${this.locale}.label.txt`;
     this.upsertDescriptorXml(xmlPath, xmlName, labelFileId, this.locale, relPath);
 

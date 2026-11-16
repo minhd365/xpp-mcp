@@ -1,15 +1,15 @@
 import { z } from 'zod';
 import * as fs from 'fs';
-import * as path from 'path';
 import { ModelRegistry } from '../core/model-registry';
-import { canonicalFolder } from '../schemas/namespaces';
+import { canonicalFolder, isSupportedAotFolder } from '../schemas/namespaces';
+import { isSafeModelName, isSafeObjectName } from '../core/path-security';
 
 export const ExploreToolInputSchema = z.object({
   action:          z.enum(['list_models', 'list_objects', 'search', 'read', 'list_types']),
-  model:           z.string().optional(),
-  type:            z.string().optional(),
+  model:           z.string().refine(isSafeModelName, 'Model name must be a safe path segment.').optional(),
+  type:            z.string().refine(isSupportedAotFolder, 'Unsupported AOT object type.').optional(),
   pattern:         z.string().optional(),
-  name:            z.string().optional(),
+  name:            z.string().refine(isSafeObjectName, 'Object name must be a safe basename.').optional(),
   includeStandard: z.boolean().default(false),
   limit:           z.number().default(50),
 });
@@ -35,10 +35,7 @@ export async function handleExploreTool(
     case 'list_types': {
       // List all AOT type folders found in a model
       if (!input.model) return 'list_types requires: model';
-      const modelInfo = registry.getModel(input.model);
-      const modelRoot = path.join(
-        registry['packagesRoot'], modelInfo.packageFolder, modelInfo.name
-      );
+      const modelRoot = registry.getModelPath(input.model);
       if (!fs.existsSync(modelRoot)) return `Model root not found: ${modelRoot}`;
       const dirs = fs.readdirSync(modelRoot, { withFileTypes: true })
         .filter(d => d.isDirectory())
@@ -50,11 +47,8 @@ export async function handleExploreTool(
     case 'list_objects': {
       if (!input.model) return 'list_objects requires: model';
       if (!input.type)  return 'list_objects requires: type';
-      const modelInfo = registry.getModel(input.model);
       const folder = canonicalFolder(input.type);
-      const folderPath = path.join(
-        registry['packagesRoot'], modelInfo.packageFolder, modelInfo.name, folder
-      );
+      const folderPath = registry.getAotFolder(input.model, folder);
       if (!fs.existsSync(folderPath)) return `Folder not found: ${folderPath}`;
       const files = fs.readdirSync(folderPath)
         .filter(f => f.endsWith('.xml'))
@@ -66,14 +60,12 @@ export async function handleExploreTool(
     case 'search': {
       if (!input.model) return 'search requires: model';
       if (!input.pattern) return 'search requires: pattern';
-      const modelInfo = registry.getModel(input.model);
-      const modelRoot = path.join(
-        registry['packagesRoot'], modelInfo.packageFolder, modelInfo.name
-      );
+      const modelRoot = registry.getModelPath(input.model);
       const typeFolders = input.type
         ? [canonicalFolder(input.type)]
         : fs.readdirSync(modelRoot, { withFileTypes: true })
-            .filter(d => d.isDirectory()).map(d => d.name);
+            .filter(d => d.isDirectory() && isSupportedAotFolder(d.name))
+            .map(d => canonicalFolder(d.name));
 
       const regex = new RegExp(
         '^' + input.pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i'
@@ -81,7 +73,7 @@ export async function handleExploreTool(
 
       const results: string[] = [];
       for (const tf of typeFolders) {
-        const tfPath = path.join(modelRoot, tf);
+        const tfPath = registry.getAotFolder(input.model, tf);
         if (!fs.existsSync(tfPath)) continue;
         const matches = fs.readdirSync(tfPath)
           .filter(f => f.endsWith('.xml'))
