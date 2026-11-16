@@ -3,10 +3,11 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Config } from '../config';
+import { assertSafeModelName, isSafeModelName, resolveContainedPath } from '../core/path-security';
 
 export const BuildToolInputSchema = z.object({
   action:      z.enum(['compile', 'sync_db', 'best_practice', 'full_build', 'validate_metadata']),
-  model:       z.string(),
+  model:       z.string().refine(isSafeModelName, 'Model name must be a safe path segment.'),
   incremental: z.boolean().default(false),
   objects:     z.array(z.string()).optional(),
   verbose:     z.boolean().default(false),
@@ -18,6 +19,7 @@ export async function handleBuildTool(
   input: BuildToolInput,
   config: Config,
 ): Promise<string> {
+  assertSafeModelName(input.model);
   switch (input.action) {
     case 'compile':
       return runCompile(input, config);
@@ -34,7 +36,7 @@ export async function handleBuildTool(
 
 async function runCompile(input: BuildToolInput, config: Config): Promise<string> {
   const xppc = path.join(config.binPath, 'xppc.exe');
-  const binOut = path.join(config.packagesRoot, input.model, 'bin');
+  const binOut = resolveContainedPath(config.packagesRoot, input.model, 'bin');
   // Note: no quotes around path args — xppc.exe does not handle quoted paths correctly
   const args = [
     `-metadata=${config.packagesRoot}`,
@@ -124,7 +126,7 @@ function runProcess(
 ): Promise<string> {
   return new Promise((resolve) => {
     const start = Date.now();
-    const proc = spawn(exe, args, { shell: true });
+    const proc = spawn(exe, args, { shell: false, windowsHide: true });
     const stdout: string[] = [];
     const stderr: string[] = [];
 
@@ -167,10 +169,10 @@ function writeBuildLog(config: Config, model: string, action: string, content: s
     // Log path: PackagesRoot\<Model>\xpp-mcp-logs\build-<action>-<timestamp>.log
     // Note: ARCHITECTURE.md previously documented this without the xpp-mcp-logs subfolder.
     // The subfolder is intentional — keeps logs out of the root model folder.
-    const logDir = path.join(config.packagesRoot, model, 'xpp-mcp-logs');
+    const logDir = resolveContainedPath(config.packagesRoot, model, 'xpp-mcp-logs');
     if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
-    const logFile = path.join(logDir, `build-${action}-${ts}.log`);
+    const logFile = resolveContainedPath(logDir, `build-${action}-${ts}.log`);
     const header = [
       `Model   : ${model}`,
       `Action  : ${action}`,

@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import * as fs from 'fs';
-import * as path from 'path';
 import { ModelRegistry } from '../core/model-registry';
 import { AotWriter }     from '../core/aot-writer';
 import { LabelManager }  from '../core/label-manager';
 import { getHandler, listSupportedTypes } from '../schemas/registry';
 import { canonicalFolder } from '../schemas/namespaces';
+import { assertSafeObjectName, isSafeModelName, isSafeObjectName } from '../core/path-security';
 import type {
   TableSpec, ClassSpec, EnumSpec, EdtSpec,
   FormDataSourceDef, FastTabDef, ActionButtonDef,
@@ -68,9 +68,9 @@ const QueryDsSchema       = z.object({
 
 export const ObjectToolInputSchema = z.object({
   action:    z.enum(['create', 'inspect', 'delete', 'list_types', 'edit']),
-  type:      z.string().optional(),
-  model:     z.string().optional(),
-  name:      z.string().optional(),
+  type:      z.string().refine(isSupportedObjectType, 'Unsupported object type.').optional(),
+  model:     z.string().refine(isSafeModelName, 'Model name must be a safe path segment.').optional(),
+  name:      z.string().refine(isSafeObjectName, 'Object name must be a safe basename.').optional(),
   label:     z.string().optional(),
   helpText:  z.string().optional(),
   useLabels: z.boolean().default(true),
@@ -106,7 +106,7 @@ export const ObjectToolInputSchema = z.object({
   actionPaneButtons: z.array(ButtonSchema).optional(),
   scaffoldOnly: z.boolean().optional(),
   // field type hints for form control type resolution
-  fieldTypes: z.record(z.string()).optional(),
+  fieldTypes: z.record(z.string(), z.string()).optional(),
   // security
   entryPoints: z.array(EntryPointSchema).optional(),
   privileges:  z.array(z.string()).optional(),
@@ -144,14 +144,16 @@ export async function handleObjectTool(
 
   if (input.action === 'inspect') {
     if (!input.model || !input.type || !input.name) return 'inspect requires: model, type, name';
-    const fp = registry.getAotPath(input.model, canonicalFolder(input.type), input.name);
+    const type = requireSupportedObjectType(input.type);
+    const fp = registry.getAotPath(input.model, type, input.name);
     if (!writer.exists(fp)) return `Object not found: ${fp}`;
     return `File: ${fp}\n\n${writer.readRaw(fp)}`;
   }
 
   if (input.action === 'delete') {
     if (!input.model || !input.type || !input.name) return 'delete requires: model, type, name';
-    const fp = registry.getAotPath(input.model, canonicalFolder(input.type), input.name);
+    const type = requireSupportedObjectType(input.type);
+    const fp = registry.getAotPath(input.model, type, input.name);
     if (!writer.exists(fp)) return `Object not found: ${fp}`;
     fs.renameSync(fp, fp + '.deleted');
     return `Deleted (renamed to .deleted): ${fp}`;
@@ -163,15 +165,17 @@ export async function handleObjectTool(
   // For structural reshaping, use action:"create" (full regeneration).
   if (input.action === 'edit') {
     if (!input.model || !input.type || !input.name) return 'edit requires: model, type, name';
-    const fp = registry.getAotPath(input.model, canonicalFolder(input.type), input.name);
+    const type = requireSupportedObjectType(input.type);
+    const fp = registry.getAotPath(input.model, type, input.name);
     if (!writer.exists(fp)) return `Object not found: ${fp}. Use action:"create" first.`;
     const existing = writer.readRaw(fp);
+    registry.getModelPath(input.model);
     const model    = registry.getModel(input.model);
     const useLbls  = input.useLabels !== false;
     const patches: string[] = [];
 
     // Add new fields to AxTable or AxTableExtension
-    if ((input.type === 'AxTable' || input.type === 'AxTableExtension') && input.fields && input.fields.length > 0) {
+    if ((type === 'AxTable' || type === 'AxTableExtension') && input.fields && input.fields.length > 0) {
       const { generateField } = await import('../schemas/ax-table');
       for (const f of input.fields) {
         const resolvedLabel = f.label ? labels.resolve(model, f.name, f.label, useLbls) : undefined;
@@ -197,7 +201,7 @@ export async function handleObjectTool(
     }
 
     // Add new enum values to AxEnum
-    if (input.type === 'AxEnum' && input.values && input.values.length > 0) {
+    if (type === 'AxEnum' && input.values && input.values.length > 0) {
       for (const v of input.values) {
         if (existing.includes(`<Name>${v.name}</Name>`)) {
           patches.push(`⚠️  Enum value "${v.name}" already exists — skipped`);
@@ -222,7 +226,7 @@ export async function handleObjectTool(
     }
 
     // Add new listFields to AxForm grid (SimpleList/SimpleListDetails)
-    if (input.type === 'AxForm' && input.listFields && input.listFields.length > 0) {
+    if (type === 'AxForm' && input.listFields && input.listFields.length > 0) {
       for (const fieldName of input.listFields) {
         if (existing.includes(`<DataField>${fieldName}</DataField>`)) {
           patches.push(`⚠️  Grid field "${fieldName}" already exists — skipped`);
@@ -246,7 +250,7 @@ export async function handleObjectTool(
     }
 
     if (patches.length === 0) {
-      return `No supported edit operations specified for ${input.type}.\nSupported: fields (AxTable/AxTableExtension), values (AxEnum), listFields (AxForm).`;
+      return `No supported edit operations specified for ${type}.\nSupported: fields (AxTable/AxTableExtension), values (AxEnum), listFields (AxForm).`;
     }
     return patches.join('\n') + `\n\nNext: d365_build { action:"compile", model:"${input.model}" }`;
   }
@@ -256,14 +260,17 @@ export async function handleObjectTool(
   if (!input.model) return 'create requires: model';
   if (!input.name)  return 'create requires: name';
 
-  const handler  = getHandler(input.type);
+  const type = requireSupportedObjectType(input.type);
+  assertSafeObjectName(input.name);
+  registry.getModelPath(input.model);
+  const handler  = getHandler(type);
   const model    = registry.getModel(input.model);
   const useLbls  = input.useLabels !== false;
   const lbl      = input.label ? labels.resolve(model, input.name, input.label, useLbls) : undefined;
 
   let spec: unknown;
 
-  switch (input.type) {
+  switch (type) {
     case 'AxTable': {
       spec = {
         name: input.name, model: input.model,
@@ -364,7 +371,7 @@ export async function handleObjectTool(
     case 'AxMenuItemDisplay':
     case 'AxMenuItemAction':
     case 'AxMenuItemOutput': {
-      const kind = input.type.replace('AxMenuItem', '') as 'Display' | 'Action' | 'Output';
+      const kind = type.replace('AxMenuItem', '') as 'Display' | 'Action' | 'Output';
       spec = {
         name: input.name, kind, label: lbl,
         object: input.object, objectType: input.objectType,
@@ -404,12 +411,12 @@ export async function handleObjectTool(
   }
 
   const xml      = handler.generate(spec);
-  const fp       = registry.getAotPath(input.model, canonicalFolder(input.type), input.name);
-  const result   = writer.writeObject(fp, xml, input.type, input.name);
+  const fp       = registry.getAotPath(input.model, canonicalFolder(type), input.name);
+  const result   = writer.writeObject(fp, xml, type, input.name);
 
   const lines = [`✅ ${result.created ? 'Created' : 'Updated'}: ${result.path}`];
   if (useLbls && lbl?.startsWith('@')) {
-    const ldir = path.join(registry['packagesRoot'], model.packageFolder, model.name, 'AxLabelFile');
+    const ldir = registry.getAotFolder(input.model, 'AxLabelFile');
     lines.push(`📄 Labels: ${ldir}`);
   }
   lines.push('', 'Next steps:');
@@ -417,4 +424,16 @@ export async function handleObjectTool(
   lines.push(`  2. Compile: d365_build { action:"compile", model:"${input.model}" }`);
   lines.push(`  3. Sync DB: d365_build { action:"sync_db", model:"${input.model}" }`);
   return lines.join('\n');
+}
+
+function requireSupportedObjectType(objectType: string): string {
+  const supported = listSupportedTypes().find(type => type.toLowerCase() === objectType.toLowerCase());
+  if (!supported) {
+    throw new Error(`Unsupported object type: "${objectType}". Supported: ${listSupportedTypes().join(', ')}`);
+  }
+  return supported;
+}
+
+function isSupportedObjectType(objectType: string): boolean {
+  return listSupportedTypes().some(type => type.toLowerCase() === objectType.toLowerCase());
 }

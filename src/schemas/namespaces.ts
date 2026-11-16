@@ -88,5 +88,13 @@ export const AOT_FOLDER_CANONICAL: Record<string, string> = {
 };
 
 export function canonicalFolder(objectType: string): string {
-  return AOT_FOLDER_CANONICAL[objectType.toLowerCase()] ?? objectType;
+  const key = objectType.toLowerCase();
+  if (!Object.prototype.hasOwnProperty.call(AOT_FOLDER_CANONICAL, key)) {
+    throw new Error(`Unsupported AOT object type: "${objectType}"`);
+  }
+  return AOT_FOLDER_CANONICAL[key];
+}
+
+export function isSupportedAotFolder(objectType: string): boolean {
+  return Object.prototype.hasOwnProperty.call(AOT_FOLDER_CANONICAL, objectType.toLowerCase());
 }
